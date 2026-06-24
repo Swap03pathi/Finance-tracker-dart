@@ -1,10 +1,17 @@
 import 'dart:convert';
 import 'dart:io';
 
-/// Loads the doc 07 §6 rule lists from config/*.json (copied from the server repo). Data, not code.
-/// In the Flutter app (Phase 3) these become bundled assets; here they load from the package root.
+/// Loads the doc 07 §6 rule lists. Data, not code (doc 02).
+/// - Tests / CLI: read from `config/*.json` on disk (cwd = package root).
+/// - On-device (Flutter): the app loads the files from bundled assets and calls [primeConfig] at
+///   startup, so the synchronous getters below return the injected JSON (no filesystem on device).
+Map<String, Map<String, dynamic>> _override = {};
+
+/// Inject pre-loaded config (e.g. from Flutter assets) so the engine stays Flutter-free + synchronous.
+void primeConfig(Map<String, Map<String, dynamic>> loaded) => _override = loaded;
+
 Map<String, dynamic> _loadJson(String name) =>
-    jsonDecode(File('config/$name').readAsStringSync()) as Map<String, dynamic>;
+    _override[name] ?? jsonDecode(File('config/$name').readAsStringSync()) as Map<String, dynamic>;
 
 class GateRules {
   final List<String> transactionVerbs, failedContext, future, conditional, hold, mandate, refund;

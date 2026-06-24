@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:finman_engine/finman_engine.dart';
 
 /// Golden-vector lockstep (doc 10 §3): the Dart port must reproduce the TS reference output for every

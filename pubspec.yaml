@@ -1,23 +1,36 @@
 name: finman_engine
 description: >-
-  On-device SMS parsing core for the AI Personal CFO — a Dart port of the TypeScript @finman/engine
-  reference. Gate, parseAmount, fingerprint (merchant-masking), redact, apply-template. Privacy-first:
-  raw SMS never leaves the device; only redacted skeletons cross the wire.
+  AI Personal CFO — device app + on-device SMS parsing core (Dart port of the TS @finman/engine
+  reference). Privacy-first: raw SMS never leaves the device; only redacted skeletons cross the wire.
 version: 0.1.0
 publish_to: none
 
 environment:
-  sdk: ^3.0.0
+  sdk: ">=3.5.0 <4.0.0"
+  flutter: ">=3.24.0"
 
 dependencies:
-  decimal: ^3.0.0   # mirror decimal.js arithmetic so parsed paise match the TS reference exactly
-  crypto: ^3.0.3    # sha256 for the structural fingerprint
-  uuid: ^4.5.0      # deterministic UUIDv5 for idempotent entry ids
-  http: ^1.2.0      # sync client -> server
-  drift: ^2.20.0    # local SQLite (device store)
-  sqlite3: ^2.4.0   # native sqlite for dart-test (sqlite3_flutter_libs added when Flutter app)
+  flutter:
+    sdk: flutter
+  decimal: ^3.0.0          # decimal.js parity for exact paise
+  crypto: ^3.0.3           # sha256 fingerprint
+  uuid: ^4.5.0             # deterministic UUIDv5 entry ids
+  http: ^1.2.0             # sync client
+  drift: ^2.20.0           # local SQLite
+  sqlite3: ^2.4.0          # host sqlite for tests
+  sqlite3_flutter_libs: ^0.5.24   # bundled native sqlite on-device
+  path_provider: ^2.1.4    # device DB path
+  path: ^1.9.0
+  permission_handler: ^11.3.1     # READ_SMS runtime permission
 
 dev_dependencies:
-  test: ^1.25.0
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
   drift_dev: ^2.20.0
   build_runner: ^2.4.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - config/   # doc 07 §6 rule data, loaded on-device via rootBundle then primeConfig()

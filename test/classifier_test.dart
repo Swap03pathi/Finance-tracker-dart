@@ -1,4 +1,4 @@
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:finman_engine/finman_engine.dart';
 
 /// Device-side classification + idempotency parity with the TS engine (matrix F/G/H/MULTI keys).

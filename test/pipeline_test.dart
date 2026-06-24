@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
-import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:finman_engine/finman_engine.dart';
 import 'package:finman_engine/data/database.dart';
 import 'package:finman_engine/pipeline/ingest.dart';

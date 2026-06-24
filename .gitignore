@@ -18,3 +18,7 @@ pubspec.lock
 
 # drift generated
 *.g.dart
+
+# flutter build output
+/build/
+.dart_tool/
