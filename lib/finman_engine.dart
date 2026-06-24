@@ -10,3 +10,4 @@ export 'src/gate.dart';
 export 'src/mask.dart';
 export 'src/fingerprint.dart';
 export 'src/redact.dart';
+export 'src/apply_template.dart';

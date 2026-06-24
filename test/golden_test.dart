@@ -38,6 +38,18 @@ void main() {
     }
   });
 
+  group('template-vectors.json — apply a known template locally', () {
+    for (final v in _load('template-vectors.json')) {
+      test('"${(v['body'] as String).substring(0, 24)}…"', () {
+        final r = parseWithTemplate(v['regex'] as String, v['body'] as String);
+        expect(r, isNotNull);
+        expect(r!.amountPaise, v['amountPaise']);
+        expect(r.balancePaise, v['balancePaise']);
+        expect(r.merchant, v['merchant']);
+      });
+    }
+  });
+
   group('redaction-vectors.json (W) — privacy, highest priority', () {
     for (final v in _load('redaction-vectors.json')) {
       test('"${(v['input'] as String).substring(0, (v['input'] as String).length.clamp(0, 24))}…"', () {
