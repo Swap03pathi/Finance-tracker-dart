@@ -15,3 +15,6 @@ pubspec.lock
 # local SMS corpus — may contain real PII, NEVER commit
 **/corpus/private/
 *.corpus.private.json
+
+# drift generated
+*.g.dart

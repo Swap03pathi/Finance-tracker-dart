@@ -20,3 +20,10 @@ Paise rupeesToPaise(String rupees) =>
 /// Integer paise -> Decimal rupees.
 Decimal paiseToRupees(Paise paise) =>
     (Decimal.fromInt(paise) / Decimal.fromInt(100)).toDecimal();
+
+/// Integer paise -> wire rupee string "1234.50" (what the server's EntryInput expects).
+String paiseToWire(Paise paise) {
+  final neg = paise < 0;
+  final a = paise.abs();
+  return '${neg ? '-' : ''}${a ~/ 100}.${(a % 100).toString().padLeft(2, '0')}';
+}

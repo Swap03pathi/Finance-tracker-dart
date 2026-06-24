@@ -11,3 +11,8 @@ export 'src/mask.dart';
 export 'src/fingerprint.dart';
 export 'src/redact.dart';
 export 'src/apply_template.dart';
+export 'src/modality.dart';
+export 'src/money_type.dart';
+export 'src/counted.dart';
+export 'src/idempotent_id.dart';
+export 'src/multipart.dart';
