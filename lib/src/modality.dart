@@ -19,10 +19,6 @@ Modality classifyModality(String body) {
   return Modality.actual;
 }
 
-/// A reversal notice ("transaction reversed") is an actual credit that nets via settlement (MOD-10).
-bool isReversalNotice(String body) =>
-    RegExp(r'\breversed\b|reversal of|credited back', caseSensitive: false).hasMatch(body);
-
 extension ModalityWire on Modality {
   String get wire => name; // 'actual' | 'future' | ... matches the server enum
 }

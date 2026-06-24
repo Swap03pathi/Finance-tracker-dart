@@ -1,6 +1,7 @@
 /// Structural masker — port of TS `mask.ts` (incl. the FIXED §MERCHANT§ pass). The skeleton produced
 /// here is BOTH the fingerprint key AND the redaction skeleton (same code path → the LLM never sees a
 /// real value). Order matters; this must produce byte-identical output to the TS reference.
+library;
 
 // 1) currency amounts incl L/Cr/k notation, "/-" suffix, and the word "rupees"
 final _reAmount = RegExp(

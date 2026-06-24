@@ -5,7 +5,6 @@ import 'package:http/testing.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:finman_engine/data/database.dart';
 import 'package:finman_engine/sync/sync_client.dart';
-import 'package:drift/drift.dart' show Value;
 
 /// Sync client (3.E) — verified against an in-process mock server (deterministic). A live smoke test
 /// against http://18.206.195.183 is run separately in CI/bash.

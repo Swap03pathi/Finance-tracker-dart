@@ -9,12 +9,11 @@ import 'device/db_open.dart';
 
 /// Load the doc 07 §6 rule data from bundled assets into the (Flutter-free) engine config cache.
 Future<void> _primeConfigFromAssets() async {
+  // only the config the device engine actually reads today (payee/PSP + merchant dict arrive in P5)
   const names = [
     'gate-rules.json',
     'sender-normalisation.json',
-    'psp-suffixes.json',
     'own-node-senders.json',
-    'merchant-vpa-dictionary.json',
   ];
   final loaded = <String, Map<String, dynamic>>{};
   for (final n in names) {

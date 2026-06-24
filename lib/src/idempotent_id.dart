@@ -14,7 +14,7 @@ String? extractReference(String body) {
     r'(?:upi(?:\s*ref(?:erence)?(?:\s*no\.?)?)?|ref(?:erence)?(?:\s*(?:no|id|num)\.?)?|rrn|utr|txn\s*id|transaction\s*id)[:#.\s-]*((?=[a-z0-9]*\d)[a-z0-9]{6,})',
     caseSensitive: false,
   ).firstMatch(body);
-  return m == null ? null : m.group(1)!.toUpperCase();
+  return m?.group(1)!.toUpperCase();
 }
 
 const dedupFallbackWindowSec = 10;

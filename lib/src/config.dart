@@ -50,8 +50,3 @@ Set<String> ownNodeIssuers() => _ownNodes ??= {
       for (final s in List<String>.from(_loadJson('own-node-senders.json')['ownNodeIssuers']))
         s.toUpperCase()
     };
-
-Map<String, String>? _merchants;
-/// Big-merchant dictionary → cold-start category hint (first guess; user confirmation wins).
-Map<String, String> merchantDictionary() => _merchants ??= Map<String, String>.from(
-    _loadJson('merchant-vpa-dictionary.json')['merchants'] as Map);

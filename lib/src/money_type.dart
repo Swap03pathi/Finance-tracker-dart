@@ -1,3 +1,5 @@
+// Enum values mirror the server's Direction wire enum exactly — intentional UPPER_CASE.
+// ignore_for_file: constant_identifier_names
 import 'config.dart';
 
 /// Money-type classification — the boundary (port of TS `moneyType.ts`). EXPENSE/INCOME cross the
@@ -37,16 +39,6 @@ bool isTopupText(String body) => RegExp(
       r'gift card|gift voucher|voucher|added to .*(amazon pay|wallet) balance',
       caseSensitive: false,
     ).hasMatch(body);
-
-/// Cold-start category hint from the big-merchant dictionary.
-String? merchantCategoryHint(String merchantText) {
-  final dict = merchantDictionary();
-  final key = merchantText.toLowerCase();
-  for (final name in dict.keys) {
-    if (key.contains(name)) return dict[name];
-  }
-  return null;
-}
 
 extension DirectionWire on Direction {
   String get wire => name; // 'EXPENSE' | 'INCOME' | ... matches the server enum
