@@ -1,0 +1,17 @@
+name: finman_engine
+description: >-
+  On-device SMS parsing core for the AI Personal CFO — a Dart port of the TypeScript @finman/engine
+  reference. Gate, parseAmount, fingerprint (merchant-masking), redact, apply-template. Privacy-first:
+  raw SMS never leaves the device; only redacted skeletons cross the wire.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.0.0
+
+dependencies:
+  decimal: ^3.0.0   # mirror decimal.js arithmetic so parsed paise match the TS reference exactly
+  crypto: ^3.0.3    # sha256 for the structural fingerprint
+
+dev_dependencies:
+  test: ^1.25.0
