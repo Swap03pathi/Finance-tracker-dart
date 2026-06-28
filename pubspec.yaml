@@ -22,6 +22,8 @@ dependencies:
   path_provider: ^2.1.4    # device DB path
   path: ^1.9.0
   permission_handler: ^11.3.1     # READ_SMS runtime permission
+  fl_chart: ^0.69.0        # donut + stacked bar charts on the dashboard
+  flutter_local_notifications: ^17.2.3   # "assign a category" push for new merchants
 
 dev_dependencies:
   flutter_test:

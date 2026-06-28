@@ -1,5 +1,7 @@
+import 'package:decimal/decimal.dart';
 import 'package:flutter/material.dart';
 import 'package:finman_engine/finman_engine.dart' show categoryName;
+import '../src/money_fmt.dart';
 import '../sync/sync_service.dart';
 
 /// The ledger (doc 05 §S2): every synced transaction, honest + chronological, so the headline numbers
@@ -55,15 +57,15 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         final isIn = dir == 'INCOME';
         final isMove = dir == 'TRANSFER' || dir == 'TOPUP';
         final color = isMove ? Colors.grey : (isIn ? Colors.greenAccent : Colors.redAccent);
-        final sign = isMove ? '' : (isIn ? '+' : '−');
         final when = r['txnTime'] != null ? (r['txnTime'] as String).split('T').first : '';
+        final amt = Decimal.tryParse('${r['amountEffective']}') ?? Decimal.zero;
+        final trailing = isMove ? inr(amt) : inrSigned(amt, positive: isIn);
         return ListTile(
           leading: Icon(isMove ? Icons.swap_horiz : (isIn ? Icons.south_west : Icons.north_east), color: color),
           title: Text(r['merchantText'] ?? dir),
           subtitle: Text('${categoryName(r['categoryId'] as int?)} · ${r['modality']} · $when'
               '${counted ? '' : ' · not counted'}'),
-          trailing: Text('$sign₹${r['amountEffective']}',
-              style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 16)),
+          trailing: Text(trailing, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 16)),
         );
       },
     );
