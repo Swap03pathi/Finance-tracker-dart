@@ -86,7 +86,12 @@ List<Slice> _slices(Iterable<Txn> txns, String Function(Txn) keyOf, String Funct
             pct: total == Decimal.zero ? 0 : (e.value / total).toDouble(),
           ))
       .toList()
-    ..sort((a, b) => b.amount.compareTo(a.amount));
+    // amount desc, then label asc — the SAME comparator the monthly stacks use, so a donut and the
+    // stacked bar beneath it always assign colours in the same order (even on equal totals).
+    ..sort((a, b) {
+      final c = b.amount.compareTo(a.amount);
+      return c != 0 ? c : a.label.compareTo(b.label);
+    });
   return out;
 }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:finman_engine/finman_engine.dart' show allCategories;
 import '../sync/sync_service.dart';
+import '../theme/app_theme.dart';
 
 /// Bottom-sheet category picker: the general list + "Add new category". Returns the chosen
 /// categoryId (creating a custom category first if the user adds one), or null if dismissed.
@@ -45,24 +46,34 @@ class _CategoryPickerState extends State<_CategoryPicker> {
     final cats = allCategories();
     return Padding(
       padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 4,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+        left: AppSpacing.xl,
+        right: AppSpacing.xl,
+        top: AppSpacing.xs,
+        bottom: MediaQuery.of(context).viewInsets.bottom + AppSpacing.xl,
       ),
       child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(widget.merchant != null ? 'Category for "${widget.merchant}"' : 'Pick a category',
-            style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 12),
+            style: AppType.title),
+        const SizedBox(height: AppSpacing.xs),
+        const Text('Your choice is remembered for next time.', style: AppType.caption),
+        const SizedBox(height: AppSpacing.md),
         Wrap(
-          spacing: 8,
-          runSpacing: 8,
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
           children: [
-            for (final e in cats.entries)
-              ActionChip(label: Text(e.value), onPressed: () => Navigator.of(context).pop(e.key)),
+            for (final e in cats.entries.toList().asMap().entries)
+              ActionChip(
+                avatar: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(color: AppColors.seriesAt(e.key), shape: BoxShape.circle),
+                ),
+                label: Text(e.value.value),
+                onPressed: () => Navigator.of(context).pop(e.value.key),
+              ),
           ],
         ),
-        const Divider(height: 28),
+        const Divider(height: AppSpacing.xl + AppSpacing.xs),
         if (!_adding)
           Align(
             alignment: Alignment.centerLeft,
@@ -83,7 +94,7 @@ class _CategoryPickerState extends State<_CategoryPicker> {
                 onSubmitted: (_) => _create(),
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: AppSpacing.sm),
             FilledButton(onPressed: _busy ? null : _create, child: const Text('Add')),
           ]),
       ]),

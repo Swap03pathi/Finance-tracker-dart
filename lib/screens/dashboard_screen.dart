@@ -1,8 +1,11 @@
 import 'package:decimal/decimal.dart';
 import 'package:flutter/material.dart';
 import '../src/money_fmt.dart';
+import '../src/reconcile.dart';
 import '../src/spend_analytics.dart';
 import '../sync/sync_service.dart';
+import '../theme/app_theme.dart';
+import '../theme/widgets.dart';
 import 'category_detail_screen.dart';
 import 'category_picker.dart';
 import 'charts.dart';
@@ -24,6 +27,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, dynamic>? _data;
   SpendData? _spend;
   List<String> _uncategorised = const [];
+  ReconciliationResult? _recon;
   String? _error;
 
   @override
@@ -62,6 +66,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _data = d;
           _spend = SpendData(expenseTxns(entries), lineLabel);
           _uncategorised = uncats.toList()..sort();
+          _recon = reconcile(entries); // balance check (silent until balanceAfter is on /entries)
         });
       }
     } catch (e) {
@@ -86,138 +91,139 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     // Body only — the HomeShell provides the Scaffold, app bar (with the hamburger menu) and drawer.
-    return _error != null
-        ? Padding(padding: const EdgeInsets.all(20), child: Text('Error: $_error'))
-        : _data == null
-            ? const Center(child: CircularProgressIndicator())
-            : RefreshIndicator(onRefresh: _load, child: _content(context, _data!));
+    if (_error != null) {
+      return Padding(
+        padding: AppSpacing.screen,
+        child: EmptyState(icon: Icons.error_outline, title: 'Could not load', subtitle: _error, tint: AppColors.negative),
+      );
+    }
+    if (_data == null) return const Center(child: CircularProgressIndicator());
+    return RefreshIndicator(onRefresh: _load, child: _content(context, _data!));
   }
 
   Widget _content(BuildContext context, Map<String, dynamic> d) {
     final period = (d['period'] as Map?) ?? const {};
     final balances = (d['balances'] as List?) ?? const [];
     final cats = byCategory(_spend!.txns);
+    final recon = _recon;
     return ListView(
-      padding: const EdgeInsets.all(16),
+      padding: AppSpacing.screen,
       children: [
-        if (period['isThin'] == true)
-          Container(
-            padding: const EdgeInsets.all(12),
-            margin: const EdgeInsets.only(bottom: 16),
-            decoration: BoxDecoration(color: Colors.amber.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(10)),
-            child: Row(children: [
-              const Icon(Icons.info_outline, size: 18, color: Colors.amber),
-              const SizedBox(width: 8),
-              Expanded(child: Text('Showing ${period['label'] ?? 'since you installed'}. Your full picture builds as you go.')),
-            ]),
+        if (period['isThin'] == true) ...[
+          AttentionBanner(
+            icon: Icons.info_outline,
+            color: AppColors.warning,
+            child: Text('Showing ${period['label'] ?? 'since you installed'}. Your full picture builds as you go.',
+                style: AppType.body),
           ),
+          const SizedBox(height: AppSpacing.lg),
+        ],
 
-        // ── merchants needing a category (prompt) ──
-        if (_uncategorised.isNotEmpty) _needsCategoryCard(context),
+        // ── balance reconciliation: unexplained gaps need a look ──
+        if (recon != null && recon.hasGaps) ...[
+          _needsReviewCard(recon),
+          const SizedBox(height: AppSpacing.lg),
+        ],
 
-        // ── headline numbers as cards ──
+        // ── merchants needing a category ──
+        if (_uncategorised.isNotEmpty) ...[
+          _needsCategoryCard(),
+          const SizedBox(height: AppSpacing.lg),
+        ],
+
+        // ── headline numbers ──
         Row(children: [
-          _stat('Income', _dec(d['income']), const Color(0xFF7ED957)),
-          const SizedBox(width: 10),
-          _stat('Expenses', _dec(d['expenses']), const Color(0xFFFF8FA3), onTap: _openTransactions),
+          Expanded(child: StatTile(label: 'Income', value: inr(_dec(d['income'])), color: AppColors.positive)),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: StatTile(
+                label: 'Expenses', value: inr(_dec(d['expenses'])), color: AppColors.negative, onTap: _openTransactions),
+          ),
         ]),
-        const SizedBox(height: 10),
-        _stat('Savings', _dec(d['savings']), const Color(0xFF63C7FF), wide: true),
-        const SizedBox(height: 24),
+        const SizedBox(height: AppSpacing.md),
+        StatTile(label: 'Savings', value: inr(_dec(d['savings'])), color: AppColors.primary, emphasize: true),
+        const SizedBox(height: AppSpacing.xl),
 
         // ── category donut (tap → drill-down) ──
-        Text('Spending by category', style: Theme.of(context).textTheme.titleMedium),
-        const Text('Tap a category to see platforms, accounts and months.',
-            style: TextStyle(fontSize: 12, color: Colors.grey)),
-        const SizedBox(height: 12),
-        DonutBreakdown(
-          slices: cats,
-          centerLabel: 'Spent',
-          centerValue: _dec(d['expenses']),
-          onTap: (s) {
-            final cid = int.tryParse(s.key);
-            Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => CategoryDetailScreen(data: _spend!, categoryId: cid == -1 ? null : cid, categoryLabel: s.label),
-            ));
-          },
+        const SectionHeader('Spending by category', caption: 'Tap a category to see platforms, accounts and months.'),
+        SectionCard(
+          child: DonutBreakdown(
+            slices: cats,
+            centerLabel: 'Spent',
+            centerValue: _dec(d['expenses']),
+            onTap: (s) {
+              final cid = int.tryParse(s.key);
+              Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) =>
+                    CategoryDetailScreen(data: _spend!, categoryId: cid == -1 ? null : cid, categoryLabel: s.label),
+              ));
+            },
+          ),
         ),
-        const SizedBox(height: 24),
+        const SizedBox(height: AppSpacing.xl),
 
         // ── account balances (snapshot) ──
-        Text('Account balances', style: Theme.of(context).textTheme.titleMedium),
-        const Text('Latest balance per account from your SMS — a snapshot, not part of income − expenses.',
-            style: TextStyle(fontSize: 12, color: Colors.grey)),
-        const SizedBox(height: 8),
-        if (balances.isEmpty) const Text('No balance-bearing messages yet.'),
-        ...balances.map((b) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-                Flexible(child: Text('${b['label'] ?? b['lineId']}', overflow: TextOverflow.ellipsis)),
-                Text(inr(_dec(b['balance'])), style: const TextStyle(fontWeight: FontWeight.w600)),
-              ]),
-            )),
-        const SizedBox(height: 24),
-        OutlinedButton.icon(
-          onPressed: _openTransactions,
-          icon: const Icon(Icons.receipt_long),
-          label: const Text('View all transactions'),
+        const SectionHeader('Account balances',
+            caption: 'Latest balance per account from your SMS — a snapshot, not part of income − expenses.'),
+        SectionCard(
+          child: balances.isEmpty
+              ? const EmptyState(icon: Icons.account_balance_wallet_outlined, title: 'No balance-bearing messages yet.')
+              : Column(
+                  children: balances
+                      .map((b) => LabelledRow(label: '${b['label'] ?? b['lineId']}', value: inr(_dec(b['balance']))))
+                      .toList(),
+                ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.xl),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _openTransactions,
+            icon: const Icon(Icons.receipt_long, size: 18),
+            label: const Text('View all transactions'),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
       ],
     );
   }
 
-  Widget _needsCategoryCard(BuildContext context) {
-    const amber = Color(0xFFFFC861);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: amber.withValues(alpha: 0.10),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: amber.withValues(alpha: 0.4)),
-      ),
+  /// DF-3: per-account balance gaps that don't reconcile (Slice-aware — a flag, never a hard error).
+  Widget _needsReviewCard(ReconciliationResult recon) {
+    return AttentionBanner(
+      icon: Icons.fact_check_outlined,
+      color: AppColors.warning,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          const Icon(Icons.label_important_outline, size: 18, color: amber),
-          const SizedBox(width: 8),
-          Text('${_uncategorised.length} merchant${_uncategorised.length == 1 ? '' : 's'} need a category',
-              style: const TextStyle(fontWeight: FontWeight.w600)),
-        ]),
-        const SizedBox(height: 4),
-        const Text('Tap to assign — your choice is remembered for next time.',
-            style: TextStyle(fontSize: 12, color: Colors.grey)),
-        const SizedBox(height: 6),
-        ..._uncategorised.map((m) => ListTile(
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-              leading: const Icon(Icons.store_outlined, size: 20),
-              title: Text(m, overflow: TextOverflow.ellipsis),
-              trailing: const Icon(Icons.chevron_right, size: 18),
-              onTap: () => _assign(m),
+        Text(recon.headline ?? 'Needs review', style: AppType.body.copyWith(fontWeight: FontWeight.w700)),
+        const SizedBox(height: AppSpacing.xs),
+        const Text('A transaction may be missing or mis-read — or it could be un-messaged activity (e.g. interest).',
+            style: AppType.caption),
+        const SizedBox(height: AppSpacing.sm),
+        ...recon.accountsNeedingReview.map((a) => LabelledRow(
+              label: a.lineLabel,
+              value: inr(a.totalUnexplained),
+              valueColor: AppColors.warning,
             )),
       ]),
     );
   }
 
-  Widget _stat(String label, Decimal amount, Color color, {bool wide = false, VoidCallback? onTap}) {
-    final card = Container(
-      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
-      ),
+  Widget _needsCategoryCard() {
+    return AttentionBanner(
+      icon: Icons.label_important_outline,
+      color: AppColors.warning,
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Text(label, style: const TextStyle(fontSize: 13, color: Colors.grey)),
-          if (onTap != null) const Padding(padding: EdgeInsets.only(left: 4), child: Icon(Icons.chevron_right, size: 14, color: Colors.grey)),
-        ]),
-        const SizedBox(height: 6),
-        FittedBox(child: Text(inr(amount), style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: color))),
+        Text('${_uncategorised.length} merchant${_uncategorised.length == 1 ? '' : 's'} need a category',
+            style: AppType.body.copyWith(fontWeight: FontWeight.w700)),
+        const SizedBox(height: AppSpacing.xs),
+        const Text('Tap to assign — your choice is remembered for next time.', style: AppType.caption),
+        const SizedBox(height: AppSpacing.xs),
+        ..._uncategorised.map((m) => LabelledRow(
+              label: m,
+              trailingChevron: true,
+              onTap: () => _assign(m),
+            )),
       ]),
     );
-    final tappable = onTap == null ? card : InkWell(borderRadius: BorderRadius.circular(14), onTap: onTap, child: card);
-    return wide ? SizedBox(width: double.infinity, child: tappable) : Expanded(child: tappable);
   }
 }

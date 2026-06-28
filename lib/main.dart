@@ -12,6 +12,8 @@ import 'sync/sync_client.dart';
 import 'sync/sync_service.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/transactions_screen.dart';
+import 'theme/app_theme.dart';
+import 'theme/widgets.dart';
 
 /// Pilot server (HTTP, no TLS yet — allowed via network_security_config). Configurable.
 const serverBaseUrl = 'http://18.206.195.183';
@@ -43,7 +45,7 @@ class FinmanApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) => MaterialApp(
         title: 'Finman',
-        theme: ThemeData.dark(useMaterial3: true),
+        theme: AppTheme.dark,
         home: const HomeShell(),
       );
 }
@@ -177,63 +179,85 @@ class _HomeShellState extends State<HomeShell> {
   Widget _drawer(BuildContext context) {
     return Drawer(
       child: SafeArea(
-        child: ListView(padding: EdgeInsets.zero, children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(20, 24, 20, 8),
-            child: Text('Finman', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Text(_status, style: const TextStyle(fontSize: 12, color: Colors.grey)),
-          ),
-          const Divider(height: 24),
+        child: ListView(padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.xl, AppSpacing.lg, AppSpacing.lg), children: [
+          // ── branded header ──
+          Row(children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(color: AppColors.surfaceHigh, borderRadius: BorderRadius.circular(AppRadius.md)),
+              alignment: Alignment.center,
+              child: const Icon(Icons.account_balance_wallet, size: 20, color: AppColors.primary),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            const Text('Finman', style: AppType.title),
+          ]),
+          const SizedBox(height: AppSpacing.sm),
+          Text(_status, style: AppType.caption),
+          const SizedBox(height: AppSpacing.lg),
 
-          // ── scan window ──
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
-            child: Row(children: [
-              const Expanded(child: Text('Scan messages from')),
-              const SizedBox(width: 8),
-              DropdownButton<int?>(
-                value: _scanDays,
-                onChanged: _busy ? null : (v) => setState(() => _scanDays = v),
-                items: [for (final e in _scanWindows.entries) DropdownMenuItem(value: e.key, child: Text(e.value))],
+          // ── scan window + actions ──
+          SectionCard(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+            child: Column(children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs, vertical: AppSpacing.sm),
+                child: Row(children: [
+                  const Expanded(child: Text('Scan messages from', style: AppType.body)),
+                  const SizedBox(width: AppSpacing.sm),
+                  DropdownButton<int?>(
+                    value: _scanDays,
+                    isDense: true,
+                    underline: const SizedBox.shrink(),
+                    dropdownColor: AppColors.surfaceHigh,
+                    onChanged: _busy ? null : (v) => setState(() => _scanDays = v),
+                    items: [for (final e in _scanWindows.entries) DropdownMenuItem(value: e.key, child: Text(e.value))],
+                  ),
+                ]),
+              ),
+              const Divider(),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.search),
+                title: const Text('Scan inbox'),
+                subtitle: Text(_scanWindows[_scanDays]!, style: AppType.caption),
+                enabled: !_busy && _db != null,
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _scan();
+                },
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.sync),
+                title: const Text('Sync now'),
+                enabled: !_busy && _sync != null,
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _runSync();
+                },
               ),
             ]),
           ),
-          ListTile(
-            leading: const Icon(Icons.search),
-            title: const Text('Scan inbox'),
-            subtitle: Text(_scanWindows[_scanDays]!),
-            enabled: !_busy && _db != null,
-            onTap: () {
-              Navigator.of(context).pop();
-              _scan();
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.sync),
-            title: const Text('Sync now'),
-            enabled: !_busy && _sync != null,
-            onTap: () {
-              Navigator.of(context).pop();
-              _runSync();
-            },
-          ),
-          const Divider(height: 24),
+          const SizedBox(height: AppSpacing.xl),
 
           // ── capture status ──
-          _statusTile('Raw messages (device-local)', _raw),
-          _statusTile('Parsed, queued to sync', _pendingSync),
-          _statusTile('Unknown shape, awaiting induction', _pendingParse),
+          const SectionHeader('Capture status'),
+          SectionCard(
+            child: Column(children: [
+              _statusRow('Raw messages (device-local)', _raw),
+              _statusRow('Parsed, queued to sync', _pendingSync),
+              _statusRow('Unknown shape, awaiting induction', _pendingParse),
+            ]),
+          ),
         ]),
       ),
     );
   }
 
-  Widget _statusTile(String label, int n) => ListTile(
-        dense: true,
-        title: Text(label, style: const TextStyle(fontSize: 13)),
-        trailing: Text('$n', style: const TextStyle(fontWeight: FontWeight.bold)),
+  Widget _statusRow(String label, int n) => LabelledRow(
+        label: label,
+        value: '$n',
+        valueColor: n > 0 ? AppColors.primary : AppColors.textTertiary,
       );
 }

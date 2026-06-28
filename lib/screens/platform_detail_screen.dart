@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../src/money_fmt.dart';
 import '../src/spend_analytics.dart';
+import '../theme/app_theme.dart';
+import '../theme/widgets.dart';
 import 'charts.dart';
 
 /// L3 — one platform inside one category: spend split by account, plus month-by-month spend as a
@@ -20,30 +22,38 @@ class PlatformDetailScreen extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(title: Text(merchant)),
-      body: ListView(padding: const EdgeInsets.all(20), children: [
-        Text('Total spent here', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey)),
-        Text(inr(total), style: const TextStyle(fontSize: 30, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 24),
+      body: ListView(padding: AppSpacing.screen, children: [
+        SectionCard(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('TOTAL SPENT HERE', style: AppType.sectionLabel),
+            const SizedBox(height: AppSpacing.sm),
+            Text(inr(total), style: AppType.display),
+          ]),
+        ),
+        const SizedBox(height: AppSpacing.xl),
 
-        Text('By account', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        ...byAccount.asMap().entries.map((e) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Row(children: [
-                Container(width: 12, height: 12, decoration: BoxDecoration(color: colorAt(e.key), shape: BoxShape.circle)),
-                const SizedBox(width: 12),
-                Expanded(child: Text(e.value.label, overflow: TextOverflow.ellipsis)),
-                Text(inr(e.value.amount), style: const TextStyle(fontWeight: FontWeight.w600)),
-              ]),
-            )),
-        const SizedBox(height: 28),
+        const SectionHeader('By account'),
+        SectionCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ...byAccount.asMap().entries.map((e) => LabelledRow(
+                    dot: colorAt(e.key),
+                    label: e.value.label,
+                    value: inr(e.value.amount),
+                  )),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
 
-        Text('Month by month', style: Theme.of(context).textTheme.titleMedium),
-        const Text('Each bar is a month; segments show which account paid.',
-            style: TextStyle(fontSize: 12, color: Colors.grey)),
-        const SizedBox(height: 16),
-        if (monthly.isEmpty) const Text('Not enough history yet.') else StackedMonthlyBars(data: monthly),
-        const SizedBox(height: 24),
+        const SectionHeader('Month by month',
+            caption: 'Each bar is a month; segments show which account paid.'),
+        if (monthly.isEmpty)
+          const SectionCard(child: EmptyState(icon: Icons.bar_chart, title: 'Not enough history yet.'))
+        else
+          SectionCard(child: StackedMonthlyBars(data: monthly)),
+        const SizedBox(height: AppSpacing.xl),
       ]),
     );
   }

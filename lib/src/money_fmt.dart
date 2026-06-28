@@ -5,23 +5,21 @@ import 'package:decimal/decimal.dart';
 /// Input is a [Decimal] (rupees) so we never round through a float — money is exact end to end.
 String inr(Decimal rupees) => '₹${_digits(rupees)}';
 
-/// Same but signed: `−₹450` for an outflow, `+₹65,000` for an inflow. [positive] picks the glyph set.
-String inrSigned(Decimal rupees, {required bool positive}) =>
-    '${positive ? '+' : '−'}₹${_digits(rupees.abs())}';
+/// Same but signed: `−₹450` for an outflow, `+₹65,000` for an inflow. Zero is unsigned (`₹0`).
+String inrSigned(Decimal rupees, {required bool positive}) {
+  if (rupees == Decimal.zero) return '₹0';
+  return '${positive ? '+' : '−'}₹${_digits(rupees.abs())}';
+}
 
 String _digits(Decimal rupees) {
   final neg = rupees.sign < 0;
-  final v = rupees.abs();
-  final whole = v.truncate().toBigInt().toString();
-  // fractional part, 2dp, trimmed of a pure ".00"
-  final frac = (v - v.truncate()).toString(); // e.g. "0.5" / "0" / "0.05"
-  String paise = '';
-  if (frac != '0') {
-    final after = frac.contains('.') ? frac.split('.')[1] : '';
-    final two = '${after}00'.substring(0, 2);
-    if (two != '00') paise = '.$two';
-  }
-  return '${neg ? '−' : ''}${_groupIndian(whole)}$paise';
+  // Quantise to exact paise with round-half-up (matches the server's rupeesToPaise), so 12.349 →
+  // 12.35 and 0.005 → 0.01 rather than silently truncating.
+  final paiseTotal = (rupees.abs() * Decimal.fromInt(100)).round().toBigInt();
+  final whole = (paiseTotal ~/ BigInt.from(100)).toString();
+  final paise = (paiseTotal % BigInt.from(100)).toInt();
+  final frac = paise == 0 ? '' : '.${paise.toString().padLeft(2, '0')}';
+  return '${neg ? '−' : ''}${_groupIndian(whole)}$frac';
 }
 
 /// 1234567 → "12,34,567" (last 3 digits, then groups of 2).
