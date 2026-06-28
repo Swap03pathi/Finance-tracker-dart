@@ -2,6 +2,8 @@
     <!-- doc 01 §2: the only data source is transactional SMS, read on-device (Play READ_SMS risk). -->
     <uses-permission android:name="android.permission.READ_SMS"/>
     <uses-permission android:name="android.permission.RECEIVE_SMS"/>
+    <!-- "categorise a new merchant" prompts (Android 13+ runtime permission). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="finman_engine"
         android:name="${applicationName}"

@@ -52,7 +52,7 @@ void main() {
       row(line: 'L2', merchant: null, amt: '65000', time: '2026-06-01T10:00:00Z', dir: 'INCOME'),
     ];
     final txns = expenseTxns(entries);
-    final label = (String id) => id == 'L1' ? 'HDFCBK ••1234' : 'SBIINB ••3456';
+    String label(String id) => id == 'L1' ? 'HDFCBK ••1234' : 'SBIINB ••3456';
 
     test('only counted expenses are kept', () {
       expect(txns.length, 4); // the not-counted row and the INCOME row are dropped

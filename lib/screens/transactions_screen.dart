@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:finman_engine/finman_engine.dart' show categoryName;
 import '../src/money_fmt.dart';
 import '../sync/sync_service.dart';
+import 'category_picker.dart';
 
 /// The ledger (doc 05 §S2): every synced transaction, honest + chronological, so the headline numbers
 /// are explainable. Each row shows merchant, amount, direction, category and date.
@@ -30,6 +31,15 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     }
+  }
+
+  /// Tap a transaction to (re)assign its merchant's category; the choice is remembered.
+  Future<void> _changeCategory(String merchant) async {
+    final id = await pickCategory(context, widget.sync, merchant: merchant);
+    if (id == null || !mounted) return;
+    setState(() => _rows = null);
+    await widget.sync.assignCategory(merchant, id);
+    await _load();
   }
 
   @override
@@ -60,12 +70,16 @@ class _TransactionsScreenState extends State<TransactionsScreen> {
         final when = r['txnTime'] != null ? (r['txnTime'] as String).split('T').first : '';
         final amt = Decimal.tryParse('${r['amountEffective']}') ?? Decimal.zero;
         final trailing = isMove ? inr(amt) : inrSigned(amt, positive: isIn);
+        final merchant = (r['merchantText'] as String?)?.trim();
+        final catId = r['categoryId'] as int?;
+        final canTag = !isIn && !isMove && merchant != null && merchant.isNotEmpty;
         return ListTile(
           leading: Icon(isMove ? Icons.swap_horiz : (isIn ? Icons.south_west : Icons.north_east), color: color),
-          title: Text(r['merchantText'] ?? dir),
-          subtitle: Text('${categoryName(r['categoryId'] as int?)} · ${r['modality']} · $when'
+          title: Text(merchant ?? dir),
+          subtitle: Text('${catId == null ? 'Tap to categorise' : categoryName(catId)} · ${r['modality']} · $when'
               '${counted ? '' : ' · not counted'}'),
           trailing: Text(trailing, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 16)),
+          onTap: canTag ? () => _changeCategory(merchant) : null,
         );
       },
     );

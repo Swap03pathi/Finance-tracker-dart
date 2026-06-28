@@ -118,3 +118,18 @@ Future<int> reprocessUnparsed(LocalDb db, String userId) async {
   }
   return reparsed;
 }
+
+/// Re-ingest EVERY raw message so entries pick up the current category state (a new override or
+/// custom category). Entry ids are deterministic, so the server upsert just updates categoryId — no
+/// duplicates. Used after the user assigns/changes a category, and as a one-time migration when the
+/// resolution rules change. Returns how many entries were re-queued to sync.
+Future<int> recategorizeAll(LocalDb db, String userId) async {
+  final all = await db.select(db.localRawMessages).get();
+  var n = 0;
+  for (final r in all) {
+    final res = await ingestSms(db,
+        userId: userId, sender: r.sender, body: r.body, smsTimeMs: r.smsTimeMs, messageId: r.messageId);
+    if (res.outcome == 'synced_queued') n++;
+  }
+  return n;
+}

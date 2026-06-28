@@ -4,6 +4,7 @@ import '../src/money_fmt.dart';
 import '../src/spend_analytics.dart';
 import '../sync/sync_service.dart';
 import 'category_detail_screen.dart';
+import 'category_picker.dart';
 import 'charts.dart';
 import 'transactions_screen.dart';
 
@@ -19,6 +20,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   Map<String, dynamic>? _data;
   SpendData? _spend;
+  List<String> _uncategorised = const [];
   String? _error;
 
   @override
@@ -40,15 +42,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
       for (final e in entries) {
         if (e['lineLabel'] != null) lineLabel['${e['lineId']}'] = '${e['lineLabel']}';
       }
+      // expense merchants with no category yet → prompt the user to tag them
+      final uncats = <String>{};
+      for (final e in entries) {
+        final m = (e['merchantText'] as String?)?.trim();
+        if (e['direction'] == 'EXPENSE' && e['categoryId'] == null && m != null && m.isNotEmpty) uncats.add(m);
+      }
       if (mounted) {
         setState(() {
           _data = d;
           _spend = SpendData(expenseTxns(entries), lineLabel);
+          _uncategorised = uncats.toList()..sort();
         });
       }
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     }
+  }
+
+  /// Prompt for a category for [merchant], remember it, and refresh.
+  Future<void> _assign(String merchant) async {
+    final id = await pickCategory(context, widget.sync, merchant: merchant);
+    if (id == null || !mounted) return;
+    setState(() => _data = null); // show the spinner while we recategorise + re-sync
+    await widget.sync.assignCategory(merchant, id);
+    await _load();
   }
 
   Decimal _dec(dynamic s) => Decimal.tryParse('$s') ?? Decimal.zero;
@@ -88,6 +106,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Expanded(child: Text('Showing ${period['label'] ?? 'since you installed'}. Your full picture builds as you go.')),
             ]),
           ),
+
+        // ── merchants needing a category (prompt) ──
+        if (_uncategorised.isNotEmpty) _needsCategoryCard(context),
 
         // ── headline numbers as cards ──
         Row(children: [
@@ -138,6 +159,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         const SizedBox(height: 12),
       ],
+    );
+  }
+
+  Widget _needsCategoryCard(BuildContext context) {
+    const amber = Color(0xFFFFC861);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: amber.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: amber.withValues(alpha: 0.4)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.label_important_outline, size: 18, color: amber),
+          const SizedBox(width: 8),
+          Text('${_uncategorised.length} merchant${_uncategorised.length == 1 ? '' : 's'} need a category',
+              style: const TextStyle(fontWeight: FontWeight.w600)),
+        ]),
+        const SizedBox(height: 4),
+        const Text('Tap to assign — your choice is remembered for next time.',
+            style: TextStyle(fontSize: 12, color: Colors.grey)),
+        const SizedBox(height: 6),
+        ..._uncategorised.map((m) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              leading: const Icon(Icons.store_outlined, size: 20),
+              title: Text(m, overflow: TextOverflow.ellipsis),
+              trailing: const Icon(Icons.chevron_right, size: 18),
+              onTap: () => _assign(m),
+            )),
+      ]),
     );
   }
 

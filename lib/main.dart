@@ -2,8 +2,10 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:finman_engine/finman_engine.dart' show primeConfig;
+import 'data/category_store.dart';
 import 'data/database.dart';
 import 'pipeline/ingest.dart';
+import 'device/notify.dart';
 import 'device/sms_channel.dart';
 import 'device/db_open.dart';
 import 'sync/sync_client.dart';
@@ -31,6 +33,7 @@ Future<void> _primeConfigFromAssets() async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await _primeConfigFromAssets();
+  await Notify.init(); // local-notification channel + Android 13+ permission
   runApp(const FinmanApp());
 }
 
@@ -69,7 +72,9 @@ class _CaptureScreenState extends State<CaptureScreen> {
   Future<void> _init() async {
     final db = await openDeviceDb();
     _db = db;
-    final sync = SyncService(db, SyncClient(serverBaseUrl));
+    final catStore = CategoryStore(db);
+    await catStore.load(); // prime saved overrides + custom categories before any ingest
+    final sync = SyncService(db, SyncClient(serverBaseUrl), catStore);
     _sync = sync;
     _userId = await sync.deviceKey(); // stable id-gen namespace
     _sms.onSms = _ingest;
