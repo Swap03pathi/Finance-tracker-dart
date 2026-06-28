@@ -14,7 +14,18 @@ class SyncClient {
   SyncClient(this.baseUrl, {http.Client? client}) : _http = client ?? http.Client();
 
   void setToken(String token) => _token = token;
+  String? get token => _token;
   void close() => _http.close();
+
+  /// Pilot dev sign-in: exchange a stable device key for a session JWT (server must have ALLOW_DEV_AUTH).
+  Future<void> authDev(String deviceKey) async {
+    final res = await _http.post(Uri.parse('$baseUrl/v1/auth/dev'),
+        headers: {'content-type': 'application/json'}, body: jsonEncode({'deviceKey': deviceKey}));
+    if (res.statusCode != 200 && res.statusCode != 201) {
+      throw Exception('dev auth failed: ${res.statusCode} ${res.body}');
+    }
+    _token = jsonDecode(res.body)['token'] as String;
+  }
 
   Map<String, String> get _headers => {
         'content-type': 'application/json',
@@ -82,6 +93,13 @@ class SyncClient {
       }
     }
     return done;
+  }
+
+  /// The three headline numbers + balances (server is the system of record for aggregation).
+  Future<Map<String, dynamic>> fetchDashboard() async {
+    final res = await _http.get(Uri.parse('$baseUrl/v1/dashboard'), headers: _headers);
+    if (res.statusCode != 200) throw Exception('dashboard failed: ${res.statusCode} ${res.body}');
+    return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
   Future<void> _cacheTemplate(LocalDb db, dynamic t) => db.upsertTemplate(LocalTemplateCacheCompanion.insert(

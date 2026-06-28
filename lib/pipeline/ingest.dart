@@ -101,3 +101,16 @@ Future<IngestResult> ingestSms(
   await db.markProcessed(messageId);
   return IngestResult('synced_queued', id);
 }
+
+/// Re-ingest raw messages that previously had no template (still unprocessed) — now that templates may
+/// have been pulled/induced from the server. Returns how many newly produced a sync-able entry.
+Future<int> reprocessUnparsed(LocalDb db, String userId) async {
+  final pending = await (db.select(db.localRawMessages)..where((t) => t.processed.equals(false))).get();
+  var reparsed = 0;
+  for (final r in pending) {
+    final res = await ingestSms(db,
+        userId: userId, sender: r.sender, body: r.body, smsTimeMs: r.smsTimeMs, messageId: r.messageId);
+    if (res.outcome == 'synced_queued') reparsed++;
+  }
+  return reparsed;
+}

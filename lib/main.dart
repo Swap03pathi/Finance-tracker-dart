@@ -6,15 +6,17 @@ import 'data/database.dart';
 import 'pipeline/ingest.dart';
 import 'device/sms_channel.dart';
 import 'device/db_open.dart';
+import 'sync/sync_client.dart';
+import 'sync/sync_service.dart';
+import 'screens/dashboard_screen.dart';
+
+/// Pilot server (HTTP, no TLS yet — allowed via network_security_config). Configurable.
+const serverBaseUrl = 'http://18.206.195.183';
 
 /// Load the doc 07 §6 rule data from bundled assets into the (Flutter-free) engine config cache.
 Future<void> _primeConfigFromAssets() async {
   // only the config the device engine actually reads today (payee/PSP + merchant dict arrive in P5)
-  const names = [
-    'gate-rules.json',
-    'sender-normalisation.json',
-    'own-node-senders.json',
-  ];
+  const names = ['gate-rules.json', 'sender-normalisation.json', 'own-node-senders.json'];
   final loaded = <String, Map<String, dynamic>>{};
   for (final n in names) {
     loaded[n] = jsonDecode(await rootBundle.loadString('config/$n')) as Map<String, dynamic>;
@@ -38,9 +40,7 @@ class FinmanApp extends StatelessWidget {
       );
 }
 
-/// Minimal device-core screen for Phase 4 dogfooding: grant SMS, catch-up sweep, live capture, and
-/// show local counts. (The dashboard UI proper is a later phase.) userId is a placeholder until
-/// Google sign-in (Phase 8); sync is wired in SyncClient and exercised in Phase 4.
+/// Capture screen: grant SMS, catch-up sweep, real-time capture, then sync + view the 3 numbers.
 class CaptureScreen extends StatefulWidget {
   const CaptureScreen({super.key});
   @override
@@ -48,11 +48,13 @@ class CaptureScreen extends StatefulWidget {
 }
 
 class _CaptureScreenState extends State<CaptureScreen> {
-  static const _userId = 'local-user'; // until Google sign-in (Phase 8)
   final _sms = SmsChannel();
   LocalDb? _db;
+  SyncService? _sync;
+  String _userId = 'local-user';
   String _status = 'starting…';
   int _raw = 0, _pendingSync = 0, _pendingParse = 0;
+  bool _busy = false;
 
   @override
   void initState() {
@@ -63,7 +65,10 @@ class _CaptureScreenState extends State<CaptureScreen> {
   Future<void> _init() async {
     final db = await openDeviceDb();
     _db = db;
-    _sms.onSms = _ingest; // real-time capture while foregrounded
+    final sync = SyncService(db, SyncClient(serverBaseUrl));
+    _sync = sync;
+    _userId = await sync.deviceKey(); // stable id-gen namespace
+    _sms.onSms = _ingest;
     final granted = await _sms.requestPermission();
     setState(() => _status = granted ? 'permission granted' : 'awaiting SMS permission');
     if (granted) await _sweep();
@@ -84,9 +89,21 @@ class _CaptureScreenState extends State<CaptureScreen> {
   }
 
   Future<void> _ingest(SmsMessage m) async {
-    await ingestSms(_db!,
-        userId: _userId, sender: m.sender, body: m.body, smsTimeMs: m.timeMs, messageId: m.messageId);
+    await ingestSms(_db!, userId: _userId, sender: m.sender, body: m.body, smsTimeMs: m.timeMs, messageId: m.messageId);
     await _refresh();
+  }
+
+  Future<void> _syncAndDashboard() async {
+    setState(() => _busy = true);
+    final report = await _sync!.runSync();
+    await _refresh();
+    setState(() {
+      _busy = false;
+      _status = report.error != null ? 'sync error: ${report.error}' : 'synced ${report.synced}, induced ${report.induced}';
+    });
+    if (report.error == null && mounted) {
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => DashboardScreen(sync: _sync!)));
+    }
   }
 
   Future<void> _refresh() async {
@@ -117,7 +134,14 @@ class _CaptureScreenState extends State<CaptureScreen> {
           _row('Parsed, queued to sync', _pendingSync),
           _row('Unknown shape, awaiting induction', _pendingParse),
           const SizedBox(height: 24),
-          FilledButton(onPressed: _db == null ? null : _sweep, child: const Text('Scan inbox')),
+          Row(children: [
+            FilledButton.tonal(onPressed: _db == null || _busy ? null : _sweep, child: const Text('Scan inbox')),
+            const SizedBox(width: 12),
+            FilledButton(
+              onPressed: _sync == null || _busy ? null : _syncAndDashboard,
+              child: _busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Sync & dashboard'),
+            ),
+          ]),
         ]),
       ),
     );
