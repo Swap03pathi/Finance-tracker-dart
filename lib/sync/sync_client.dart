@@ -102,6 +102,20 @@ class SyncClient {
     return jsonDecode(res.body) as Map<String, dynamic>;
   }
 
+  /// The ledger — every synced transaction (honest, chronological).
+  Future<List<dynamic>> fetchEntries() async {
+    final res = await _http.get(Uri.parse('$baseUrl/v1/entries'), headers: _headers);
+    if (res.statusCode != 200) throw Exception('entries failed: ${res.statusCode} ${res.body}');
+    return jsonDecode(res.body) as List<dynamic>;
+  }
+
+  /// Spend grouped by category / tag / line.
+  Future<List<dynamic>> fetchBreakdown(String by) async {
+    final res = await _http.get(Uri.parse('$baseUrl/v1/breakdown?by=$by'), headers: _headers);
+    if (res.statusCode != 200) throw Exception('breakdown failed: ${res.statusCode} ${res.body}');
+    return jsonDecode(res.body) as List<dynamic>;
+  }
+
   Future<void> _cacheTemplate(LocalDb db, dynamic t) => db.upsertTemplate(LocalTemplateCacheCompanion.insert(
         fingerprint: t['fingerprint'] as String,
         regex: t['regex'] as String,

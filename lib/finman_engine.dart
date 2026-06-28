@@ -16,3 +16,4 @@ export 'src/money_type.dart';
 export 'src/counted.dart';
 export 'src/idempotent_id.dart';
 export 'src/multipart.dart';
+export 'src/categories.dart';

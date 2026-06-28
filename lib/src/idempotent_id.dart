@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:crypto/crypto.dart';
 import 'package:uuid/uuid.dart';
 
 /// Deterministic UUIDv5 for sync idempotency + cross-SMS dedup (port of TS `idempotentId.ts`).
@@ -19,7 +21,9 @@ String? extractReference(String body) {
 
 const dedupFallbackWindowSec = 10;
 
-/// PRIMARY: key on the bank reference (exact). FALLBACK: small time-bucket when no reference exists.
+/// PRIMARY: bank reference (exact). NEXT: a content hash of the body, so the same SMS captured by both
+/// the real-time receiver and the catch-up sweep (different timestamps) collapses to one. LAST RESORT:
+/// a small time-bucket. The body stays on the device — only the derived id leaves.
 String logicalEntryId({
   required String userId,
   required String lineKey,
@@ -27,9 +31,14 @@ String logicalEntryId({
   required int amountPaise,
   required int epochSec,
   String? reference,
+  String? content,
 }) {
   if (reference != null) {
     return uuidv5('$userId|$lineKey|ref:$reference');
+  }
+  if (content != null && content.isNotEmpty) {
+    final h = sha1.convert(utf8.encode(content)).toString();
+    return uuidv5('$userId|$lineKey|content:$h');
   }
   final bucket = epochSec ~/ dedupFallbackWindowSec;
   return uuidv5('$userId|$lineKey|$direction|$amountPaise|$bucket');

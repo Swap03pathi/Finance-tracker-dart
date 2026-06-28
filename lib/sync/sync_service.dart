@@ -1,4 +1,3 @@
-import 'package:uuid/uuid.dart';
 import '../data/database.dart';
 import '../pipeline/ingest.dart';
 import 'sync_client.dart';
@@ -18,10 +17,13 @@ class SyncService {
   SyncService(this.db, this.client);
 
   /// A stable per-device key (also the id-gen namespace). The server maps it to a user.
+  /// DEV: defaults to a shared key so the ingestion portal and the emulator see the SAME data.
+  /// (A real per-device/random key returns with Google Sign-In in Phase 8.)
+  static const devSharedKey = 'finman-dev-shared';
   Future<String> deviceKey() async {
     var k = await db.getState('deviceKey');
     if (k == null) {
-      k = const Uuid().v4();
+      k = devSharedKey;
       await db.setState('deviceKey', k);
     }
     return k;
@@ -59,5 +61,15 @@ class SyncService {
   Future<Map<String, dynamic>> fetchDashboard() async {
     await ensureAuth();
     return client.fetchDashboard();
+  }
+
+  Future<List<dynamic>> fetchEntries() async {
+    await ensureAuth();
+    return client.fetchEntries();
+  }
+
+  Future<List<dynamic>> fetchBreakdown(String by) async {
+    await ensureAuth();
+    return client.fetchBreakdown(by);
   }
 }

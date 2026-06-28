@@ -12,6 +12,7 @@ class EntryInput {
   final String modality; // actual | future | ...
   final String amountCaptured; // wire string
   final String? balanceAfter;
+  final int? categoryId;
   final String? merchantText;
   final String? txnTime; // ISO UTC
   final String? messageId;
@@ -27,6 +28,7 @@ class EntryInput {
     this.vpa,
     this.lineKind,
     this.balanceAfter,
+    this.categoryId,
     this.merchantText,
     this.txnTime,
     this.messageId,
@@ -45,6 +47,7 @@ class EntryInput {
         'modality': modality,
         'amountCaptured': amountCaptured,
         if (balanceAfter != null) 'balanceAfter': balanceAfter,
+        if (categoryId != null) 'categoryId': categoryId,
         if (merchantText != null) 'merchantText': merchantText,
         if (txnTime != null) 'txnTime': txnTime,
         'source': 'sms',

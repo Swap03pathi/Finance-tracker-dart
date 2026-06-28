@@ -15,8 +15,12 @@ const serverBaseUrl = 'http://18.206.195.183';
 
 /// Load the doc 07 §6 rule data from bundled assets into the (Flutter-free) engine config cache.
 Future<void> _primeConfigFromAssets() async {
-  // only the config the device engine actually reads today (payee/PSP + merchant dict arrive in P5)
-  const names = ['gate-rules.json', 'sender-normalisation.json', 'own-node-senders.json'];
+  const names = [
+    'gate-rules.json',
+    'sender-normalisation.json',
+    'own-node-senders.json',
+    'merchant-vpa-dictionary.json', // cold-start category hints
+  ];
   final loaded = <String, Map<String, dynamic>>{};
   for (final n in names) {
     loaded[n] = jsonDecode(await rootBundle.loadString('config/$n')) as Map<String, dynamic>;

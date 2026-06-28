@@ -80,6 +80,7 @@ Future<IngestResult> ingestSms(
     amountPaise: amountPaise,
     epochSec: smsTimeMs ~/ 1000,
     reference: reference,
+    content: body, // stable dedup key for no-reference SMS; body never leaves the device
   );
 
   final entry = EntryInput(
@@ -91,6 +92,9 @@ Future<IngestResult> ingestSms(
     modality: modality.wire,
     amountCaptured: paiseToWire(amountPaise),
     balanceAfter: balancePaise != null ? paiseToWire(balancePaise) : null,
+    // cold-start category for spends (known merchant → its category, else Miscellaneous); income/
+    // transfer/topup left uncategorised. Learn-once payee tagging is Phase 5.
+    categoryId: dir == Direction.EXPENSE ? categoryForMerchant(merchant) : null,
     merchantText: merchant,
     txnTime: DateTime.fromMillisecondsSinceEpoch(smsTimeMs, isUtc: true).toIso8601String(),
     messageId: messageId,
