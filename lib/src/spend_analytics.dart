@@ -105,24 +105,34 @@ List<Slice> byAccountForMerchant(List<Txn> txns, String merchant, String Functio
 Decimal totalOf(Iterable<Txn> txns) =>
     txns.fold(Decimal.zero, (a, t) => a + t.amount);
 
-/// L3b — within one platform, month-by-month spend stacked by account.
-MonthlyStacks monthlyByAccountForMerchant(List<Txn> txns, String merchant, String Function(String) label) {
-  final rows = txns.where((t) => t.merchant == merchant).toList();
+/// Month-by-month spend, each bar stacked by some key (account, merchant, …). Generic so the same
+/// stacked-bar widget serves both the platform view (stack by account) and the category view (stack
+/// by merchant). [keyOf] picks the stack dimension; [labelOf] turns a key into a legend label.
+MonthlyStacks _monthlyStacks(List<Txn> rows, String Function(Txn) keyOf, String Function(String) labelOf) {
   if (rows.isEmpty) return const MonthlyStacks(months: [], accounts: [], values: []);
 
   String mkey(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}';
   const mon = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
   final monthKeys = rows.map((t) => mkey(t.time)).toSet().toList()..sort();
-  final accIds = rows.map((t) => t.lineId).toSet().toList()
-    ..sort((a, b) => label(a).compareTo(label(b)));
+  // order the stack series by total spend (desc) so the colours line up with the donut above it,
+  // with a label tiebreak for deterministic ordering when totals are equal
+  final seriesTotal = <String, Decimal>{};
+  for (final t in rows) {
+    seriesTotal[keyOf(t)] = (seriesTotal[keyOf(t)] ?? Decimal.zero) + t.amount;
+  }
+  final seriesKeys = seriesTotal.keys.toList()
+    ..sort((a, b) {
+      final c = seriesTotal[b]!.compareTo(seriesTotal[a]!);
+      return c != 0 ? c : labelOf(a).compareTo(labelOf(b));
+    });
 
   final values = [
     for (final mk in monthKeys)
       [
-        for (final acc in accIds)
+        for (final s in seriesKeys)
           rows
-              .where((t) => mkey(t.time) == mk && t.lineId == acc)
+              .where((t) => mkey(t.time) == mk && keyOf(t) == s)
               .fold(Decimal.zero, (a, t) => a + t.amount),
       ],
   ];
@@ -132,5 +142,13 @@ MonthlyStacks monthlyByAccountForMerchant(List<Txn> txns, String merchant, Strin
     return "${mon[int.parse(p[1])]} '${p[0].substring(2)}";
   }).toList();
 
-  return MonthlyStacks(months: monthLabels, accounts: accIds.map(label).toList(), values: values);
+  return MonthlyStacks(months: monthLabels, accounts: seriesKeys.map(labelOf).toList(), values: values);
 }
+
+/// L3b — within one platform, month-by-month spend stacked by account.
+MonthlyStacks monthlyByAccountForMerchant(List<Txn> txns, String merchant, String Function(String) label) =>
+    _monthlyStacks(txns.where((t) => t.merchant == merchant).toList(), (t) => t.lineId, label);
+
+/// L2b — within one category, month-by-month spend stacked by platform/merchant.
+MonthlyStacks monthlyByMerchantInCategory(List<Txn> txns, int? categoryId) =>
+    _monthlyStacks(txns.where((t) => t.categoryId == categoryId).toList(), (t) => t.merchant, (m) => m);

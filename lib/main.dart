@@ -11,6 +11,7 @@ import 'device/db_open.dart';
 import 'sync/sync_client.dart';
 import 'sync/sync_service.dart';
 import 'screens/dashboard_screen.dart';
+import 'screens/transactions_screen.dart';
 
 /// Pilot server (HTTP, no TLS yet — allowed via network_security_config). Configurable.
 const serverBaseUrl = 'http://18.206.195.183';
@@ -43,18 +44,28 @@ class FinmanApp extends StatelessWidget {
   Widget build(BuildContext context) => MaterialApp(
         title: 'Finman',
         theme: ThemeData.dark(useMaterial3: true),
-        home: const CaptureScreen(),
+        home: const HomeShell(),
       );
 }
 
-/// Capture screen: grant SMS, catch-up sweep, real-time capture, then sync + view the 3 numbers.
-class CaptureScreen extends StatefulWidget {
-  const CaptureScreen({super.key});
+/// App home: the **dashboard** is the first screen. SMS capture, sync and the scan-window control
+/// live in the hamburger drawer (doc 03 §2 capture is still device-first; it's just out of the way).
+class HomeShell extends StatefulWidget {
+  const HomeShell({super.key});
   @override
-  State<CaptureScreen> createState() => _CaptureScreenState();
+  State<HomeShell> createState() => _HomeShellState();
 }
 
-class _CaptureScreenState extends State<CaptureScreen> {
+/// Scan windows offered in the drawer. null = all time.
+const _scanWindows = <int?, String>{
+  30: 'Last 30 days',
+  90: 'Last 3 months',
+  180: 'Last 6 months',
+  365: 'Last year',
+  null: 'All time',
+};
+
+class _HomeShellState extends State<HomeShell> {
   final _sms = SmsChannel();
   LocalDb? _db;
   SyncService? _sync;
@@ -62,6 +73,8 @@ class _CaptureScreenState extends State<CaptureScreen> {
   String _status = 'starting…';
   int _raw = 0, _pendingSync = 0, _pendingParse = 0;
   bool _busy = false;
+  int? _scanDays = 180; // default scan window
+  int _tick = 0; // bumped after a scan/sync to refresh the dashboard
 
   @override
   void initState() {
@@ -75,26 +88,30 @@ class _CaptureScreenState extends State<CaptureScreen> {
     final catStore = CategoryStore(db);
     await catStore.load(); // prime saved overrides + custom categories before any ingest
     final sync = SyncService(db, SyncClient(serverBaseUrl), catStore);
-    _sync = sync;
     _userId = await sync.deviceKey(); // stable id-gen namespace
     _sms.onSms = _ingest;
     final granted = await _sms.requestPermission();
-    setState(() => _status = granted ? 'permission granted' : 'awaiting SMS permission');
-    if (granted) await _sweep();
-    await _refresh();
+    if (mounted) setState(() => _sync = sync); // dashboard can render now
+    if (granted) await _scan(initial: true);
+    await _runSync(initial: true);
   }
 
-  Future<void> _sweep() async {
-    final db = _db!;
-    final since = int.tryParse(await db.getState('lastProcessedMs') ?? '0') ?? 0;
-    final msgs = await _sms.querySweep(since);
-    var maxTs = since;
+  /// Scan the SMS inbox for the chosen window and ingest anything new (idempotent).
+  Future<void> _scan({bool initial = false}) async {
+    if (_db == null || _busy) return;
+    setState(() => _busy = true);
+    final sinceMs = _scanDays == null ? 0 : DateTime.now().millisecondsSinceEpoch - _scanDays! * 86400000;
+    final msgs = await _sms.querySweep(sinceMs);
     for (final m in msgs) {
-      await _ingest(m);
-      if (m.timeMs > maxTs) maxTs = m.timeMs;
+      await ingestSms(_db!, userId: _userId, sender: m.sender, body: m.body, smsTimeMs: m.timeMs, messageId: m.messageId);
     }
-    await db.setState('lastProcessedMs', maxTs.toString());
-    setState(() => _status = 'swept ${msgs.length} message(s)');
+    await _refresh();
+    if (mounted) {
+      setState(() {
+        _busy = false;
+        _status = 'scanned ${msgs.length} message(s)';
+      });
+    }
   }
 
   Future<void> _ingest(SmsMessage m) async {
@@ -102,16 +119,17 @@ class _CaptureScreenState extends State<CaptureScreen> {
     await _refresh();
   }
 
-  Future<void> _syncAndDashboard() async {
+  Future<void> _runSync({bool initial = false}) async {
+    if (_sync == null || _busy) return;
     setState(() => _busy = true);
     final report = await _sync!.runSync();
     await _refresh();
-    setState(() {
-      _busy = false;
-      _status = report.error != null ? 'sync error: ${report.error}' : 'synced ${report.synced}, induced ${report.induced}';
-    });
-    if (report.error == null && mounted) {
-      Navigator.of(context).push(MaterialPageRoute(builder: (_) => DashboardScreen(sync: _sync!)));
+    if (mounted) {
+      setState(() {
+        _busy = false;
+        _status = report.error != null ? 'sync error: ${report.error}' : 'synced ${report.synced}, induced ${report.induced}';
+        _tick++; // refresh the dashboard with the latest data
+      });
     }
   }
 
@@ -133,34 +151,89 @@ class _CaptureScreenState extends State<CaptureScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Finman — capture')),
-      body: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(_status, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 24),
-          _row('Raw messages stored (device-local)', _raw),
-          _row('Parsed, queued to sync', _pendingSync),
-          _row('Unknown shape, awaiting induction', _pendingParse),
-          const SizedBox(height: 24),
-          Row(children: [
-            FilledButton.tonal(onPressed: _db == null || _busy ? null : _sweep, child: const Text('Scan inbox')),
-            const SizedBox(width: 12),
-            FilledButton(
-              onPressed: _sync == null || _busy ? null : _syncAndDashboard,
-              child: _busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Sync & dashboard'),
-            ),
-          ]),
+      appBar: AppBar(title: const Text('Dashboard'), actions: [
+        if (_busy)
+          const Padding(
+            padding: EdgeInsets.only(right: 16),
+            child: Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))),
+          )
+        else
+          IconButton(icon: const Icon(Icons.sync), tooltip: 'Sync now', onPressed: _sync == null ? null : _runSync),
+        IconButton(
+          icon: const Icon(Icons.receipt_long),
+          tooltip: 'Transactions',
+          onPressed: _sync == null
+              ? null
+              : () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => TransactionsScreen(sync: _sync!))),
+        ),
+      ]),
+      drawer: _drawer(context),
+      body: _sync == null
+          ? const Center(child: CircularProgressIndicator())
+          : DashboardScreen(sync: _sync!, refreshTick: _tick),
+    );
+  }
+
+  Widget _drawer(BuildContext context) {
+    return Drawer(
+      child: SafeArea(
+        child: ListView(padding: EdgeInsets.zero, children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 24, 20, 8),
+            child: Text('Finman', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Text(_status, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+          ),
+          const Divider(height: 24),
+
+          // ── scan window ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+            child: Row(children: [
+              const Expanded(child: Text('Scan messages from')),
+              const SizedBox(width: 8),
+              DropdownButton<int?>(
+                value: _scanDays,
+                onChanged: _busy ? null : (v) => setState(() => _scanDays = v),
+                items: [for (final e in _scanWindows.entries) DropdownMenuItem(value: e.key, child: Text(e.value))],
+              ),
+            ]),
+          ),
+          ListTile(
+            leading: const Icon(Icons.search),
+            title: const Text('Scan inbox'),
+            subtitle: Text(_scanWindows[_scanDays]!),
+            enabled: !_busy && _db != null,
+            onTap: () {
+              Navigator.of(context).pop();
+              _scan();
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.sync),
+            title: const Text('Sync now'),
+            enabled: !_busy && _sync != null,
+            onTap: () {
+              Navigator.of(context).pop();
+              _runSync();
+            },
+          ),
+          const Divider(height: 24),
+
+          // ── capture status ──
+          _statusTile('Raw messages (device-local)', _raw),
+          _statusTile('Parsed, queued to sync', _pendingSync),
+          _statusTile('Unknown shape, awaiting induction', _pendingParse),
         ]),
       ),
     );
   }
 
-  Widget _row(String label, int n) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Flexible(child: Text(label)),
-          Text('$n', style: const TextStyle(fontWeight: FontWeight.bold)),
-        ]),
+  Widget _statusTile(String label, int n) => ListTile(
+        dense: true,
+        title: Text(label, style: const TextStyle(fontSize: 13)),
+        trailing: Text('$n', style: const TextStyle(fontWeight: FontWeight.bold)),
       );
 }

@@ -15,6 +15,7 @@ class CategoryDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final inCat = data.txns.where((t) => t.categoryId == categoryId).toList();
     final platforms = byMerchantInCategory(data.txns, categoryId);
+    final monthly = monthlyByMerchantInCategory(data.txns, categoryId);
 
     return Scaffold(
       appBar: AppBar(title: Text(categoryLabel)),
@@ -32,6 +33,14 @@ class CategoryDetailScreen extends StatelessWidget {
         const SizedBox(height: 8),
         const Text('Tap a platform for per-account and month-by-month detail.',
             style: TextStyle(fontSize: 12, color: Colors.grey)),
+        const SizedBox(height: 28),
+
+        Text('Month by month', style: Theme.of(context).textTheme.titleMedium),
+        const Text('Each bar is a month; segments show which platform you spent on.',
+            style: TextStyle(fontSize: 12, color: Colors.grey)),
+        const SizedBox(height: 16),
+        if (monthly.isEmpty) const Text('Not enough history yet.') else StackedMonthlyBars(data: monthly),
+        const SizedBox(height: 24),
       ]),
     );
   }

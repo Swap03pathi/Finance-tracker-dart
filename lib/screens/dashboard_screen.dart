@@ -12,7 +12,10 @@ import 'transactions_screen.dart';
 /// category → platform → per-account / month-by-month. Data comes from the server, aggregated on-device.
 class DashboardScreen extends StatefulWidget {
   final SyncService sync;
-  const DashboardScreen({super.key, required this.sync});
+
+  /// Bumped by the host shell after a scan/sync so the dashboard reloads its data.
+  final int refreshTick;
+  const DashboardScreen({super.key, required this.sync, this.refreshTick = 0});
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
@@ -27,6 +30,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant DashboardScreen old) {
+    super.didUpdateWidget(old);
+    if (old.refreshTick != widget.refreshTick) _load(); // host scanned/synced → refresh
   }
 
   Future<void> _load() async {
@@ -76,16 +85,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Dashboard'), actions: [
-        IconButton(icon: const Icon(Icons.receipt_long), tooltip: 'Transactions', onPressed: _openTransactions),
-      ]),
-      body: _error != null
-          ? Padding(padding: const EdgeInsets.all(20), child: Text('Error: $_error'))
-          : _data == null
-              ? const Center(child: CircularProgressIndicator())
-              : RefreshIndicator(onRefresh: _load, child: _content(context, _data!)),
-    );
+    // Body only — the HomeShell provides the Scaffold, app bar (with the hamburger menu) and drawer.
+    return _error != null
+        ? Padding(padding: const EdgeInsets.all(20), child: Text('Error: $_error'))
+        : _data == null
+            ? const Center(child: CircularProgressIndicator())
+            : RefreshIndicator(onRefresh: _load, child: _content(context, _data!));
   }
 
   Widget _content(BuildContext context, Map<String, dynamic> d) {

@@ -88,5 +88,15 @@ void main() {
       final junIdx = ms.months.indexWhere((m) => m.startsWith('Jun'));
       expect(ms.values[junIdx][0], d('450'));
     });
+
+    test('L2 monthly stacks for a category are keyed by merchant', () {
+      final ms = monthlyByMerchantInCategory(txns, 1); // Food
+      expect(ms.accounts, ['Swiggy', 'Zomato']); // stacked by merchant, sorted by label
+      final junIdx = ms.months.indexWhere((m) => m.startsWith('Jun'));
+      final mayIdx = ms.months.indexWhere((m) => m.startsWith('May'));
+      // June: Swiggy 1000, Zomato 450 ; May: Swiggy 0, Zomato 550
+      expect(ms.values[junIdx], [d('1000'), d('450')]);
+      expect(ms.values[mayIdx], [d('0'), d('550')]);
+    });
   });
 }
