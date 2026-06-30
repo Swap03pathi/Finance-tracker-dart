@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -93,20 +94,34 @@ class _HomeShellState extends State<HomeShell> {
     _userId = await sync.deviceKey(); // stable id-gen namespace
     _sms.onSms = _ingest;
     final granted = await _sms.requestPermission();
-    if (mounted) setState(() => _sync = sync); // dashboard can render now
-    if (granted) await _scan(initial: true);
+    // Render the dashboard immediately; it fetches its own data. Scan + sync run in the BACKGROUND so
+    // first paint is never blocked on the SMS sweep or the network round-trips.
+    if (mounted) setState(() => _sync = sync);
+    unawaited(_startupSync(granted));
+  }
+
+  Future<void> _startupSync(bool granted) async {
+    if (granted) await _scan(initial: true); // incremental: only messages newer than the last checkpoint
     await _runSync(initial: true);
   }
 
-  /// Scan the SMS inbox for the chosen window and ingest anything new (idempotent).
+  /// Scan the SMS inbox and ingest anything new (idempotent). The auto/initial scan is INCREMENTAL —
+  /// only messages newer than the last-processed checkpoint — so launches don't re-sweep the whole
+  /// window every time. A manual "Scan inbox" re-scans the chosen window (to backfill older messages).
   Future<void> _scan({bool initial = false}) async {
     if (_db == null || _busy) return;
-    setState(() => _busy = true);
-    final sinceMs = _scanDays == null ? 0 : DateTime.now().millisecondsSinceEpoch - _scanDays! * 86400000;
+    if (mounted) setState(() => _busy = true);
+    final db = _db!;
+    final checkpoint = int.tryParse(await db.getState('lastProcessedMs') ?? '0') ?? 0;
+    final windowFloor = _scanDays == null ? 0 : DateTime.now().millisecondsSinceEpoch - _scanDays! * 86400000;
+    final sinceMs = initial ? (checkpoint > windowFloor ? checkpoint : windowFloor) : windowFloor;
     final msgs = await _sms.querySweep(sinceMs);
+    var maxTs = checkpoint;
     for (final m in msgs) {
       await ingestSms(_db!, userId: _userId, sender: m.sender, body: m.body, smsTimeMs: m.timeMs, messageId: m.messageId);
+      if (m.timeMs > maxTs) maxTs = m.timeMs;
     }
+    await db.setState('lastProcessedMs', maxTs.toString());
     await _refresh();
     if (mounted) {
       setState(() {
