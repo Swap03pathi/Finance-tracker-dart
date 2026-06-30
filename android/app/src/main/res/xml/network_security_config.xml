@@ -2,6 +2,8 @@
 <!-- DEV ONLY: allow cleartext (HTTP) to the pilot server, which has no TLS yet. Everything else stays
      HTTPS-only. Remove this once the server has a domain + cert (Phase: TLS). -->
 <network-security-config>
+    <!-- Deny cleartext everywhere by default; only the one pilot IP below is exempted. -->
+    <base-config cleartextTrafficPermitted="false" />
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="false">18.206.195.183</domain>
     </domain-config>

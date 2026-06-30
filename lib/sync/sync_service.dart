@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:math';
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:finman_engine/finman_engine.dart' show categoryForMerchant;
 import '../data/category_store.dart';
 import '../data/database.dart';
@@ -28,16 +30,25 @@ class SyncService {
   SyncService(this.db, this.client, this.categories);
 
   /// A stable per-device key (also the id-gen namespace). The server maps it to a user.
-  /// DEV: defaults to a shared key so the ingestion portal and the emulator see the SAME data.
-  /// (A real per-device/random key returns with Google Sign-In in Phase 8.)
+  /// DEBUG/PROFILE: a shared key so the ingestion portal and the emulator see the SAME data.
+  /// RELEASE (distribution): a per-install random key — a shared key would collapse EVERY install onto
+  /// one server user, leaking every user's ledger to every other. Persisted once, then stable.
+  /// (A real per-account identity arrives with Google Sign-In in Phase 8.)
   static const devSharedKey = 'finman-dev-shared';
   Future<String> deviceKey() async {
     var k = await db.getState('deviceKey');
     if (k == null) {
-      k = devSharedKey;
+      k = kReleaseMode ? _randomDeviceKey() : devSharedKey;
       await db.setState('deviceKey', k);
     }
     return k;
+  }
+
+  /// 128 bits of CSPRNG entropy as a stable, unguessable per-install identity.
+  static String _randomDeviceKey() {
+    final r = Random.secure();
+    final bytes = List<int>.generate(16, (_) => r.nextInt(256));
+    return 'inst-${bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}';
   }
 
   Future<void> ensureAuth() async {
